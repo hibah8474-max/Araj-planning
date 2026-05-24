@@ -24,7 +24,8 @@ CAPIENZA_FILE = {
     "Terza Fila": 9,
     "Quarta Fila": 8,
     "Quinta Fila": 8,
-    "Sesta Fila (Altre)": 8
+    "Sesta Fila (Altre)": 8,
+    "Spiaggia Libera / Esterna": 20 # <--- Aggiunto per le postazioni extra!
 }
 
 # Date stagioni (Anno, Mese, Giorno)
@@ -38,7 +39,6 @@ STAGIONI_DATE = {
 GIORNI_FESTIVI = [date(2026, 6, 2), date(2026, 8, 15)]
 
 # Formato: "Fila": {"Feriale": [Prezzo, Suppl. 4° pax], "Festivo": [Prezzo, Suppl. 4° pax]}
-# Nota: La 2/3 e 4/5 sono accorpate nei listini, ma qui le separiamo per facilità di codice
 TARIFFE = {
     "Alta A": {
         "Prima Fila": {"Feriale": [38, 8], "Festivo": [40, 10]},
@@ -46,7 +46,8 @@ TARIFFE = {
         "Terza Fila": {"Feriale": [36, 7], "Festivo": [38, 8]},
         "Quarta Fila": {"Feriale": [34, 6], "Festivo": [36, 7]},
         "Quinta Fila": {"Feriale": [34, 6], "Festivo": [36, 7]},
-        "Sesta Fila (Altre)": {"Feriale": [32, 5], "Festivo": [34, 6]}
+        "Sesta Fila (Altre)": {"Feriale": [32, 5], "Festivo": [34, 6]},
+        "Spiaggia Libera / Esterna": {"Feriale": [0, 0], "Festivo": [0, 0]}
     },
     "Alta B": {
         "Prima Fila": {"Feriale": [40, 8], "Festivo": [42, 10]},
@@ -54,7 +55,8 @@ TARIFFE = {
         "Terza Fila": {"Feriale": [38, 7], "Festivo": [40, 8]},
         "Quarta Fila": {"Feriale": [36, 6], "Festivo": [38, 7]},
         "Quinta Fila": {"Feriale": [36, 6], "Festivo": [38, 7]},
-        "Sesta Fila (Altre)": {"Feriale": [34, 5], "Festivo": [36, 6]}
+        "Sesta Fila (Altre)": {"Feriale": [34, 5], "Festivo": [36, 6]},
+        "Spiaggia Libera / Esterna": {"Feriale": [0, 0], "Festivo": [0, 0]}
     },
     "Altissima": {
         "Prima Fila": {"Feriale": [56, 10], "Festivo": [58, 12]},
@@ -62,19 +64,21 @@ TARIFFE = {
         "Terza Fila": {"Feriale": [53, 8], "Festivo": [55, 10]},
         "Quarta Fila": {"Feriale": [49, 7], "Festivo": [52, 8]},
         "Quinta Fila": {"Feriale": [49, 7], "Festivo": [52, 8]},
-        "Sesta Fila (Altre)": {"Feriale": [42, 6], "Festivo": [44, 7]}
+        "Sesta Fila (Altre)": {"Feriale": [42, 6], "Festivo": [44, 7]},
+        "Spiaggia Libera / Esterna": {"Feriale": [0, 0], "Festivo": [0, 0]}
     },
-    "Peak Season": { # Peak non ha differenze fer/fes nei pdf, usiamo lo stesso per entrambi
+    "Peak Season": { 
         "Prima Fila": {"Feriale": [74, 14], "Festivo": [74, 14]},
         "Seconda Fila": {"Feriale": [65, 10], "Festivo": [65, 10]},
         "Terza Fila": {"Feriale": [65, 10], "Festivo": [65, 10]},
         "Quarta Fila": {"Feriale": [60, 9], "Festivo": [60, 9]},
         "Quinta Fila": {"Feriale": [60, 9], "Festivo": [60, 9]},
-        "Sesta Fila (Altre)": {"Feriale": [49, 8], "Festivo": [49, 8]}
+        "Sesta Fila (Altre)": {"Feriale": [49, 8], "Festivo": [49, 8]},
+        "Spiaggia Libera / Esterna": {"Feriale": [0, 0], "Festivo": [0, 0]}
     }
 }
 
-# Prezzi generici per risorse (puoi modificarli in base alla stagione reale)
+# Prezzi generici per risorse extra (da aggiornare in base al listino reale se variano)
 PREZZI_EXTRA = {
     "Lettino Singolo": 12,
     "Ombrellone Singolo Libera": 25,
@@ -87,7 +91,7 @@ def trova_stagione(data_sel):
         for inizio, fine in intervalli:
             if inizio <= data_sel <= fine:
                 return stagione
-    return "Alta A" # Default se fuori dalle date
+    return "Alta A"
 
 def calcola_prezzo_automatico(data_sel, fila, persone, durata, extra_scelti):
     stagione = trova_stagione(data_sel)
@@ -97,23 +101,19 @@ def calcola_prezzo_automatico(data_sel, fila, persone, durata, extra_scelti):
     is_festivo = (data_sel in GIORNI_FESTIVI)
     tipo_tariffa = "Festivo" if (is_weekend or is_festivo) else "Feriale"
     
-    # 1. Prezzo Base (Postazione)
     prezzo_base = TARIFFE[stagione][fila][tipo_tariffa][0]
     suppl_persona = TARIFFE[stagione][fila][tipo_tariffa][1]
     
-    # Modificatori durata
     if durata == "Mezza Giornata (fino 13 / da 15.30)":
-        prezzo_base = prezzo_base * 0.70 # Circa il 30% in meno per la mezza giornata
+        prezzo_base = prezzo_base * 0.70
     elif durata == "Solo 1 Persona (Postazione Ridotta)":
-        prezzo_base = prezzo_base * 0.75 # Sconto per la postazione da 1 persona
+        prezzo_base = prezzo_base * 0.75
         
     totale = prezzo_base
     
-    # 2. Supplemento 4a persona
     if persone > 3:
         totale += suppl_persona
         
-    # 3. Somma Risorse Extra
     for ex in extra_scelti:
         totale += PREZZI_EXTRA.get(ex, 0)
         
@@ -129,11 +129,17 @@ def carica_clienti():
 def carica_prenotazioni():
     if os.path.exists(FILE_PRENOTAZIONI):
         df = pd.read_csv(FILE_PRENOTAZIONI, dtype={'Telefono': str})
-        colonne_necessarie = ["Hotel", "Persone", "Durata", "Extra"]
-        for col in colonne_necessarie:
-            if col not in df.columns:
-                df[col] = ""
-        df.fillna("", inplace=True)
+        
+        # FIX DELL'ERRORE: Inserisce le colonne mancanti in modo sicuro
+        if "Hotel" not in df.columns: df["Hotel"] = ""
+        if "Persone" not in df.columns: df["Persone"] = 2
+        if "Durata" not in df.columns: df["Durata"] = "Giornata Intera"
+        if "Extra" not in df.columns: df["Extra"] = ""
+        
+        df["Hotel"] = df["Hotel"].fillna("")
+        df["Persone"] = df["Persone"].fillna(2)
+        df["Durata"] = df["Durata"].fillna("Giornata Intera")
+        df["Extra"] = df["Extra"].fillna("")
         return df
     return pd.DataFrame(columns=["Data", "Fila", "Ombrellone", "Telefono", "Stato", "Prezzo_Giorno", "Hotel", "Persone", "Durata", "Extra"])
 
@@ -149,7 +155,6 @@ st.sidebar.header("📝 Gestione Prenotazioni")
 with st.sidebar.form("form_prenotazione"):
     date_selezionate = st.date_input("Intervallo Date (Arrivo e Partenza)", [])
     
-    # Selezione Dinamica della Fila e Capienza
     input_fila = st.selectbox("Fila", list(CAPIENZA_FILE.keys()))
     max_ombrelloni_riga = CAPIENZA_FILE[input_fila]
     
@@ -169,7 +174,6 @@ with st.sidebar.form("form_prenotazione"):
     input_hotel = st.text_input("Nome Hotel (Opzionale)")
     
     st.markdown("---")
-    # Nuovo blocco Persone e Durata
     col_p, col_d = st.columns(2)
     with col_p:
         input_persone = st.number_input("Persone (Max 4)", min_value=1, max_value=4, value=2)
@@ -179,7 +183,6 @@ with st.sidebar.form("form_prenotazione"):
     if input_persone == 4:
         st.warning("⚠️ 4 Persone: Scatta il supplemento automatico!")
         
-    # Risorse Aggiuntive
     input_extra = st.multiselect("🏖️ Risorse Aggiuntive Libere", list(PREZZI_EXTRA.keys()))
     
     st.markdown("---")
@@ -218,7 +221,6 @@ if submit:
             prezzo_giorno_specifico = calcola_prezzo_automatico(giorno_corrente_obj, input_fila, input_persone, input_durata, input_extra)
             prezzo_finale = input_prezzo if input_prezzo != prezzo_consigliato else prezzo_giorno_specifico
             
-            # Pulizia vecchie righe stesse coordinate
             df_pren = df_pren[~((df_pren['Data'] == giorno_corrente_str) & (df_pren['Ombrellone'] == input_ombrellone) & (df_pren['Fila'] == input_fila))]
             
             if "Libero" not in input_stato:
@@ -268,7 +270,6 @@ def controlla_posto(numero_ombrellone, fila):
     durata = record.iloc[0].get('Durata', "")
     extra = record.iloc[0].get('Extra', "")
     
-    # Icone per mezza giornata o extra
     badge_durata = "🌗" if "Mezza" in str(durata) else ""
     badge_extra = "➕" if extra else ""
     
@@ -288,7 +289,6 @@ def controlla_posto(numero_ombrellone, fila):
 
 for nome_fila, max_posti in CAPIENZA_FILE.items():
     st.subheader(nome_fila)
-    # Crea il numero esatto di colonne richieste (14, 9 o 8)
     colonne_griglia = st.columns(max_posti) 
     for i in range(max_posti):
         numero_omb = i + 1
