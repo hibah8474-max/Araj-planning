@@ -20,7 +20,7 @@ FILE_CLIENTI = 'clienti.csv'
 # 🤖 CONFIGURAZIONE BOT TELEGRAM (GRATIS)
 # ==========================================
 TELEGRAM_TOKEN = "8804050943:AAHvXVmSnEUPlvV6mj33JGGQHfhosnqcC2U"
-TELEGRAM_CHAT_ID = "8663794616"  # Inserito il tuo ID personale
+TELEGRAM_CHAT_ID = "8663794616"  
 
 def invia_notifica_telegram(messaggio):
     messaggio_codificato = urllib.parse.quote(messaggio)
@@ -168,20 +168,36 @@ st.title("🏖️ Beach Pass - Planning Ombrelloni Pro")
 df_clienti = carica_clienti()
 df_pren = carica_prenotazioni()
 
-# --- 🔍 MOTORE DI RICERCA ---
-with st.expander("🔍 Cerca Cliente / Verifica Prenotazione", expanded=False):
+# --- 🔍 MOTORE DI RICERCA CON MODIFICA RAPIDA COMPLETA ---
+with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
     ricerca = st.text_input("Inserisci una parte del Nome, del Telefono o dell'Hotel:", placeholder="Es. Mario, 340123..., Miramare").strip()
     if ricerca:
         if not df_pren.empty:
             mask_nome = df_pren['Nome'].astype(str).str.contains(ricerca, case=False, na=False)
             mask_tel = df_pren['Telefono'].astype(str).str.contains(ricerca, case=False, na=False)
             mask_hotel = df_pren['Hotel'].astype(str).str.contains(ricerca, case=False, na=False)
+            
             risultati = df_pren[mask_nome | mask_tel | mask_hotel].sort_values(by="Data")
             
             if not risultati.empty:
-                st.success(f"Trovate {len(risultati)} prenotazioni per '{ricerca}':")
-                colonne_mostrate = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Prezzo_Giorno"]
-                st.dataframe(risultati[colonne_mostrate], use_container_width=True)
+                st.success(f"Trovate {len(risultati)} prenotazioni per '{ricerca}'. Modifica le celle, cancella righe o aggiungine di nuove!")
+                
+                # Mostriamo tutte le colonne necessarie per non perdere dati
+                colonne_ordine = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Prezzo_Giorno", "Persone", "Durata", "Extra"]
+                risultati_filtrati = risultati[colonne_ordine]
+                
+                # L'impostazione num_rows="dynamic" permette di aggiungere o togliere righe!
+                edited_df = st.data_editor(risultati_filtrati, num_rows="dynamic", use_container_width=True)
+                
+                if st.button("💾 Salva Modifiche Rapide"):
+                    # Eliminiamo le vecchie righe associate a questa ricerca
+                    df_pren = df_pren.drop(risultati.index)
+                    # Aggiungiamo in blocco tutte le righe nuove (o modificate) dall'editor
+                    df_pren = pd.concat([df_pren, edited_df], ignore_index=True)
+                    
+                    df_pren.to_csv(FILE_PRENOTAZIONI, index=False)
+                    st.success("✅ Modifiche salvate con successo nel database!")
+                    st.rerun()
             else:
                 st.warning(f"Nessuna prenotazione trovata per '{ricerca}'.")
         else:
