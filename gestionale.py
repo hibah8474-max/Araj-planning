@@ -111,7 +111,6 @@ STATI_MAP = {
     "Completamente Libero / Cancella (Verde)": "Libero"
 }
 
-# --- IMPOSTAZIONI DELLE COLONNE PER I MENU A TENDINA ---
 CONFIGURAZIONE_COLONNE = {
     "Stato": st.column_config.SelectboxColumn("Stato", options=["Attesa", "Confermato", "Pagato", "Libero_Mat", "Libero_Pom", "Libero"]),
     "Fila": st.column_config.SelectboxColumn("Fila", options=list(CAPIENZA_FILE.keys())),
@@ -194,7 +193,6 @@ with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
                 colonne_ordine = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Prezzo_Giorno", "Persone", "Durata", "Extra"]
                 risultati_filtrati = risultati[colonne_ordine]
                 
-                # Aggiunto column_config per i menu a tendina
                 edited_df = st.data_editor(risultati_filtrati, num_rows="dynamic", use_container_width=True, column_config=CONFIGURAZIONE_COLONNE, key="editor_ricerca")
                 
                 if st.button("💾 Salva Modifiche da Ricerca"):
@@ -339,26 +337,45 @@ if st.sidebar.button("📞 Simula Chiamata AI (Invia a Telegram)", type="primary
 
 st.sidebar.markdown("---")
 
-# --- 💬 SEZIONE WHATSAPP WEB COMPLETAMENTE GRATIS ---
+# --- 💬 COMUNICAZIONI CLIENTE MULTILINGUA (GRATIS) ---
 st.sidebar.subheader("💬 Invia Conferma (Gratis)")
 data_wa = st.sidebar.date_input("Data prenotazione", format="DD/MM/YYYY")
 nome_wa = st.sidebar.text_input("Nome Cliente")
-tel_wa = st.sidebar.text_input("Cellulare (Es: 3401234567)")
+tel_wa = st.sidebar.text_input("Cellulare (Per WhatsApp)")
+email_cliente = st.sidebar.text_input("Indirizzo Email")
+lingua_scelta = st.sidebar.selectbox("Lingua Messaggio", ["Italiano", "English"])
 
-if nome_wa and tel_wa:
-    tel_pulito = tel_wa.replace(" ", "").replace("+", "")
-    if not tel_pulito.startswith("39") and len(tel_pulito) < 11:
-        tel_pulito = "39" + tel_pulito
-        
+if nome_wa:
     data_ita = data_wa.strftime("%d/%m/%Y")
-    testo_messaggio = f"Gentile {nome_wa}, la sua prenotazione per il giorno {data_ita} è stata registrata correttamente. Le ricordiamo di arrivare entro le ore 11:00. In caso di ritardo la preghiamo di avvisare, altrimenti la prenotazione decadrà dal sistema e verrà liberata. Grazie! - Araj Beach Club"
     
-    testo_url = urllib.parse.quote(testo_messaggio)
-    url_whatsapp = f"https://wa.me/{tel_pulito}?text={testo_url}"
+    if lingua_scelta == "Italiano":
+        testo_base = f"Gentile {nome_wa}, la sua prenotazione per il giorno {data_ita} è stata registrata correttamente. Le ricordiamo di arrivare entro le ore 11:00. In caso di ritardo la preghiamo di avvisare inviando un messaggio WhatsApp al numero +39 3391789319 indicando nome di riferimento e le date della prenotazione, altrimenti la prenotazione decadrà dal sistema e verrà liberata. Grazie! - Araj Beach Club"
+        oggetto_email = "Conferma Prenotazione - Araj Beach Club"
+    else:
+        testo_base = f"Dear {nome_wa}, your reservation for {data_ita} has been successfully recorded. We remind you to arrive by 11:00 AM. In case of delay, please notify us by sending a WhatsApp message to +39 3391789319 indicating your reference name and the dates of your reservation; otherwise, the reservation will be cancelled and the spot released. Thank you! - Araj Beach Club"
+        oggetto_email = "Reservation Confirmation - Araj Beach Club"
+        
+    testo_url = urllib.parse.quote(testo_base)
+    oggetto_url = urllib.parse.quote(oggetto_email)
+    destinatario_email = email_cliente if email_cliente else ""
+
+    col1, col2 = st.sidebar.columns(2)
     
-    st.sidebar.link_button("💬 Apri e Invia su WhatsApp", url_whatsapp, use_container_width=True)
+    with col1:
+        if tel_wa:
+            tel_pulito = tel_wa.replace(" ", "").replace("+", "")
+            if not tel_pulito.startswith("39") and len(tel_pulito) < 11:
+                tel_pulito = "39" + tel_pulito
+            url_whatsapp = f"https://wa.me/{tel_pulito}?text={testo_url}"
+            st.link_button("💬 WhatsApp", url_whatsapp, use_container_width=True)
+        else:
+            st.caption("Manca il numero")
+            
+    with col2:
+        url_email = f"mailto:{destinatario_email}?subject={oggetto_url}&body={testo_url}"
+        st.link_button("📧 Email", url_email, use_container_width=True)
 else:
-    st.sidebar.caption("Inserisci Nome e Cellulare per generare il messaggio WhatsApp gratuito.")
+    st.sidebar.caption("Inserisci almeno il Nome per preparare il messaggio di conferma.")
 
 # --- MAPPA VISIVA E TABELLA INFERIORE INTERATTIVA ---
 data_visiva = st.date_input("Seleziona data del planning:", date.today(), format="DD/MM/YYYY")
@@ -417,11 +434,9 @@ if not df_oggi.empty:
     if 'Hotel' in df_oggi.columns: 
         colonne_tabella.insert(4, "Hotel")
     
-    # Aggiunto column_config anche qui sotto
     edited_oggi = st.data_editor(df_oggi[colonne_tabella], num_rows="dynamic", use_container_width=True, column_config=CONFIGURAZIONE_COLONNE, key="editor_oggi")
     
     if st.button("💾 Salva Modifiche Tabella", type="primary"):
-        # Rimuove le righe vecchie di oggi e aggiunge quelle appena modificate
         df_pren = df_pren.drop(df_oggi.index)
         df_pren = pd.concat([df_pren, edited_oggi], ignore_index=True)
         df_pren.to_csv(FILE_PRENOTAZIONI, index=False)
