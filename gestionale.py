@@ -337,22 +337,31 @@ if st.sidebar.button("📞 Simula Chiamata AI (Invia a Telegram)", type="primary
 
 st.sidebar.markdown("---")
 
-# --- 💬 COMUNICAZIONI CLIENTE MULTILINGUA (GRATIS) ---
+# --- 💬 COMUNICAZIONI CLIENTE MULTILINGUA E MULTI-DATA (GRATIS) ---
 st.sidebar.subheader("💬 Invia Conferma (Gratis)")
-data_wa = st.sidebar.date_input("Data prenotazione", format="DD/MM/YYYY")
+date_wa = st.sidebar.date_input("Date prenotazione (Arrivo e Partenza)", [], format="DD/MM/YYYY")
 nome_wa = st.sidebar.text_input("Nome Cliente")
 tel_wa = st.sidebar.text_input("Cellulare (Per WhatsApp)")
 email_cliente = st.sidebar.text_input("Indirizzo Email")
 lingua_scelta = st.sidebar.selectbox("Lingua Messaggio", ["Italiano", "English"])
 
-if nome_wa:
-    data_ita = data_wa.strftime("%d/%m/%Y")
+if nome_wa and len(date_wa) > 0:
+    data_inizio_ita = date_wa[0].strftime("%d/%m/%Y")
     
+    # Gestione singola data o intervallo date
+    if len(date_wa) > 1 and date_wa[0] != date_wa[1]:
+        data_fine_ita = date_wa[1].strftime("%d/%m/%Y")
+        stringa_date_ita = f"dal {data_inizio_ita} al {data_fine_ita}"
+        stringa_date_eng = f"from {data_inizio_ita} to {data_fine_ita}"
+    else:
+        stringa_date_ita = f"per il giorno {data_inizio_ita}"
+        stringa_date_eng = f"for {data_inizio_ita}"
+        
     if lingua_scelta == "Italiano":
-        testo_base = f"Gentile {nome_wa}, la sua prenotazione per il giorno {data_ita} è stata registrata correttamente. Le ricordiamo di arrivare entro le ore 11:00. In caso di ritardo la preghiamo di avvisare inviando un messaggio WhatsApp al numero +39 3391789319 indicando nome di riferimento e le date della prenotazione, altrimenti la prenotazione decadrà dal sistema e verrà liberata. Grazie! - Araj Beach Club"
+        testo_base = f"Gentile {nome_wa}, la sua prenotazione {stringa_date_ita} è stata registrata correttamente. Le ricordiamo di arrivare entro le ore 11:00. In caso di ritardo la preghiamo di avvisare inviando un messaggio WhatsApp al numero +39 3391789319 indicando nome di riferimento e le date della prenotazione, altrimenti la prenotazione decadrà dal sistema e verrà liberata. Grazie! - Araj Beach Club"
         oggetto_email = "Conferma Prenotazione - Araj Beach Club"
     else:
-        testo_base = f"Dear {nome_wa}, your reservation for {data_ita} has been successfully recorded. We remind you to arrive by 11:00 AM. In case of delay, please notify us by sending a WhatsApp message to +39 3391789319 indicating your reference name and the dates of your reservation; otherwise, the reservation will be cancelled and the spot released. Thank you! - Araj Beach Club"
+        testo_base = f"Dear {nome_wa}, your reservation {stringa_date_eng} has been successfully recorded. We remind you to arrive by 11:00 AM. In case of delay, please notify us by sending a WhatsApp message to +39 3391789319 indicating your reference name and the dates of your reservation; otherwise, the reservation will be cancelled and the spot released. Thank you! - Araj Beach Club"
         oggetto_email = "Reservation Confirmation - Araj Beach Club"
         
     testo_url = urllib.parse.quote(testo_base)
@@ -374,8 +383,10 @@ if nome_wa:
     with col2:
         url_email = f"mailto:{destinatario_email}?subject={oggetto_url}&body={testo_url}"
         st.link_button("📧 Email", url_email, use_container_width=True)
+elif nome_wa and len(date_wa) == 0:
+    st.sidebar.warning("⚠️ Seleziona le date per generare il messaggio.")
 else:
-    st.sidebar.caption("Inserisci almeno il Nome per preparare il messaggio di conferma.")
+    st.sidebar.caption("Inserisci Nome e Date per preparare il messaggio di conferma.")
 
 # --- MAPPA VISIVA E TABELLA INFERIORE INTERATTIVA ---
 data_visiva = st.date_input("Seleziona data del planning:", date.today(), format="DD/MM/YYYY")
