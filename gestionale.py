@@ -32,6 +32,18 @@ def invia_notifica_telegram(messaggio):
         return False
 
 # ==========================================
+# ⚙️ FUNZIONI DI PULIZIA E RICERCA INTELLIGENTE
+# ==========================================
+
+def normalizza_tel(t):
+    """Pulisce il numero rimuovendo spazi, + e il prefisso 39 per evitare sdoppiamenti"""
+    if not t or pd.isna(t): return ""
+    t = str(t).strip().replace(" ", "").replace("+", "")
+    if t.startswith("39") and len(t) > 9:
+        t = t[2:]
+    return t
+
+# ==========================================
 # ⚙️ CONFIGURAZIONE TARIFFE E STAGIONI
 # ==========================================
 
@@ -179,19 +191,26 @@ st.title("🏖️ Beach Pass - Planning Ombrelloni Pro")
 df_clienti = carica_clienti()
 df_pren = carica_prenotazioni()
 
-# --- 🔍 MOTORE DI RICERCA CON MODIFICA RAPIDA COMPLETA ---
+# --- 🔍 MOTORE DI RICERCA INTELLIGENTE ---
 with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
-    ricerca = st.text_input("Inserisci una parte del Nome, del Telefono o dell'Hotel:", placeholder="Es. Mario, 340123..., Miramare").strip()
+    ricerca = st.text_input("Inserisci una parte del Nome, del Telefono o dell'Hotel:", placeholder="Es. Armando Botta, 328...").strip()
     if ricerca:
         if not df_pren.empty:
-            mask_nome = df_pren['Nome'].astype(str).str.contains(ricerca, case=False, na=False)
+            parole = ricerca.split()
+            
+            # Crea una maschera intelligente per il nome (tutte le parole in qualsiasi ordine)
+            mask_nome = pd.Series(True, index=df_pren.index)
+            for parola in parole:
+                mask_nome &= df_pren['Nome'].astype(str).str.contains(parola, case=False, na=False)
+            
+            # Ricerca classica per Telefono o Hotel
             mask_tel = df_pren['Telefono'].astype(str).str.contains(ricerca, case=False, na=False)
             mask_hotel = df_pren['Hotel'].astype(str).str.contains(ricerca, case=False, na=False)
             
             risultati = df_pren[mask_nome | mask_tel | mask_hotel].sort_values(by="Data")
             
             if not risultati.empty:
-                st.success(f"Trovate {len(risultati)} prenotazioni. Fai doppio clic sulle celle per modificarle (Stato, Prezzo, Data, Extra, Note)!")
+                st.success(f"Trovate {len(risultati)} prenotazioni. Fai doppio clic sulle celle per modificarle!")
                 
                 colonne_ordine = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Prezzo_Giorno", "Persone", "Durata", "Extra", "Note"]
                 risultati_filtrati = risultati[colonne_ordine]
@@ -246,8 +265,12 @@ with st.sidebar.form("form_prenotazione"):
     st.markdown("---")
     input_telefono = st.text_input("Telefono Cliente (Opzionale)").strip()
     nome_automatico = ""
+    
+    # Auto-completamento intelligente (ignora +39 e spazi)
     if input_telefono and not df_clienti.empty:
-        cliente_esistente = df_clienti[df_clienti['Telefono'] == input_telefono]
+        tel_norm = normalizza_tel(input_telefono)
+        df_clienti['Tel_Norm'] = df_clienti['Telefono'].apply(normalizza_tel)
+        cliente_esistente = df_clienti[df_clienti['Tel_Norm'] == tel_norm]
         if not cliente_esistente.empty:
             nome_automatico = cliente_esistente.iloc[0]['Nome']
             st.sidebar.info(f"👤 Trovato in anagrafica: {nome_automatico}")
@@ -296,9 +319,19 @@ if submit:
                 d_ita = f"{d[8:10]}/{d[5:7]}/{d[0:4]}"
                 st.sidebar.warning(f"👉 Omb. {row_conf['Ombrellone']} prenotato da {row_conf['Nome']} ({d_ita})")
         else:
+            # Salvataggio Anagrafica intelligente
             if input_telefono:
-                if input_telefono in df_clienti['Telefono'].values:
-                    df_clienti.loc[df_clienti['Telefono'] == input_telefono, 'Nome'] = input_nome
+                tel_norm = normalizza_tel(input_telefono)
+                if not df_clienti.empty:
+                    df_clienti['Tel_Norm'] = df_clienti['Telefono'].apply(normalizza_tel)
+                    if tel_norm in df_clienti['Tel_Norm'].values:
+                        idx = df_clienti[df_clienti['Tel_Norm'] == tel_norm].index
+                        df_clienti.loc[idx, 'Nome'] = input_nome
+                        df_clienti.loc[idx, 'Telefono'] = input_telefono
+                    else:
+                        nuovo_c = pd.DataFrame([{"Telefono": input_telefono, "Nome": input_nome}])
+                        df_clienti = pd.concat([df_clienti, nuovo_c], ignore_index=True)
+                    df_clienti = df_clienti.drop(columns=['Tel_Norm'], errors='ignore')
                 else:
                     nuovo_c = pd.DataFrame([{"Telefono": input_telefono, "Nome": input_nome}])
                     df_clienti = pd.concat([df_clienti, nuovo_c], ignore_index=True)
