@@ -126,7 +126,7 @@ MESI_ITA = ["", "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno", "L
 STATI_MAP = {
     "In Attesa (Giallo)": "Attesa",
     "Confermato (Rosso)": "Confermato",
-    "Pagato (Blu)": "Pagato",
+    "Presente e Pagato (Blu)": "Presente e Pagato",
     "Presente in Spiaggia (Viola)": "Presente",
     "Liberato Solo Mattina (Rivendibile)": "Libero_Mat",
     "Liberato Solo Pomeriggio (Rivendibile)": "Libero_Pom",
@@ -244,6 +244,9 @@ st.divider()
 # --- BARRA LATERALE ---
 st.sidebar.header("📝 Gestione Prenotazioni")
 
+# SPOSTATO IN CIMA ALLA BARRA LATERALE
+input_operatore = st.sidebar.selectbox("👤 Chi sta registrando la prenotazione?", ["Hiba Laawissi", "Rachele", "Francesca", "Matilde Montis"])
+
 st.sidebar.subheader("1. Scegli Date e Fila")
 date_selezionate = st.sidebar.date_input("Intervallo Date (Arrivo e Partenza)", [], format="DD/MM/YYYY")
 input_fila = st.sidebar.selectbox("Fila", list(CAPIENZA_FILE.keys()))
@@ -274,8 +277,6 @@ with st.sidebar.form("form_prenotazione"):
         input_ombrellone = st.number_input(f"N° Ombrellone Iniziale", min_value=1, max_value=max_start, value=1, step=1)
         
     st.markdown("---")
-    
-    input_operatore = st.selectbox("Registrato da (Operatore):", ["Hiba Laawissi", "Rachele", "Francesca", "Matilde Montis"])
     
     input_telefono = st.text_input("Telefono Cliente (Opzionale)").strip()
     nome_automatico = ""
