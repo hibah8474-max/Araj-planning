@@ -58,6 +58,7 @@ CAPIENZA_FILE = {
 }
 
 STAGIONI_DATE = {
+    "Media": [(date(2026, 5, 30), date(2026, 6, 19))],
     "Alta A": [(date(2026, 6, 20), date(2026, 7, 3))],
     "Alta B": [(date(2026, 7, 4), date(2026, 7, 17)), (date(2026, 9, 1), date(2026, 9, 27))],
     "Altissima": [(date(2026, 7, 18), date(2026, 7, 31)), (date(2026, 8, 24), date(2026, 8, 31))],
@@ -67,6 +68,15 @@ STAGIONI_DATE = {
 GIORNI_FESTIVI = [date(2026, 6, 2), date(2026, 8, 15)]
 
 TARIFFE = {
+    "Media": {
+        "Prima Fila": {"Feriale": [30, 7], "Festivo": [33, 9]},
+        "Seconda Fila": {"Feriale": [28, 6], "Festivo": [31, 8]},
+        "Terza Fila": {"Feriale": [28, 6], "Festivo": [31, 8]},
+        "Quarta Fila": {"Feriale": [27, 5], "Festivo": [29, 7]},
+        "Quinta Fila": {"Feriale": [27, 5], "Festivo": [29, 7]},
+        "Sesta Fila (Altre)": {"Feriale": [26, 4], "Festivo": [27, 5]},
+        "Spiaggia Libera / Esterna": {"Feriale": [24, 0], "Festivo": [30, 0]}
+    },
     "Alta A": {
         "Prima Fila": {"Feriale": [38, 8], "Festivo": [40, 10]},
         "Seconda Fila": {"Feriale": [36, 7], "Festivo": [38, 8]},
@@ -137,7 +147,8 @@ def trova_stagione(data_sel):
         for inizio, fine in intervalli:
             if inizio <= data_sel <= fine:
                 return stagione
-    return "Alta A"
+    # Se cade fuori dai range definiti, applichiamo di default la tariffa "Media"
+    return "Media"
 
 def calcola_prezzo_automatico(data_sel, fila, persone, durata, extra_scelti):
     stagione = trova_stagione(data_sel)
@@ -198,12 +209,10 @@ with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
         if not df_pren.empty:
             parole = ricerca.split()
             
-            # Crea una maschera intelligente per il nome (tutte le parole in qualsiasi ordine)
             mask_nome = pd.Series(True, index=df_pren.index)
             for parola in parole:
                 mask_nome &= df_pren['Nome'].astype(str).str.contains(parola, case=False, na=False)
             
-            # Ricerca classica per Telefono o Hotel
             mask_tel = df_pren['Telefono'].astype(str).str.contains(ricerca, case=False, na=False)
             mask_hotel = df_pren['Hotel'].astype(str).str.contains(ricerca, case=False, na=False)
             
@@ -266,7 +275,6 @@ with st.sidebar.form("form_prenotazione"):
     input_telefono = st.text_input("Telefono Cliente (Opzionale)").strip()
     nome_automatico = ""
     
-    # Auto-completamento intelligente (ignora +39 e spazi)
     if input_telefono and not df_clienti.empty:
         tel_norm = normalizza_tel(input_telefono)
         df_clienti['Tel_Norm'] = df_clienti['Telefono'].apply(normalizza_tel)
@@ -319,7 +327,6 @@ if submit:
                 d_ita = f"{d[8:10]}/{d[5:7]}/{d[0:4]}"
                 st.sidebar.warning(f"👉 Omb. {row_conf['Ombrellone']} prenotato da {row_conf['Nome']} ({d_ita})")
         else:
-            # Salvataggio Anagrafica intelligente
             if input_telefono:
                 tel_norm = normalizza_tel(input_telefono)
                 if not df_clienti.empty:
