@@ -19,7 +19,8 @@ FILE_CLIENTI = 'clienti.csv'
 # ==========================================
 # 👤 TEAM E OPERATORI
 # ==========================================
-OPERATORI_SPIAGGIA = ["Hiba Laawissi", "Rachele Filippin", "Federica Nebuloni", "Matilde Montis"]
+OPERATORI_SPIAGGIA = ["Hiba Laawissi", "Rachele Filippin", "Federica Nebuloni", "Matilde Montis", "Eduardo Bustamante", "Alberto Bertolotti"]
+OPZIONI_INCASSO = ["Da saldare"] + OPERATORI_SPIAGGIA
 
 # ==========================================
 # 🤖 CONFIGURAZIONE BOT TELEGRAM (GRATIS)
@@ -147,7 +148,7 @@ CONFIGURAZIONE_COLONNE = {
     "Persone": st.column_config.NumberColumn("Persone", min_value=1, step=1),
     "Note": st.column_config.TextColumn("Note / Memo"),
     "Operatore": st.column_config.SelectboxColumn("Operatore", options=OPERATORI_SPIAGGIA),
-    "Incassato_da": st.column_config.SelectboxColumn("Incassato da", options=[""] + OPERATORI_SPIAGGIA)
+    "Incassato_da": st.column_config.SelectboxColumn("Incassato da", options=OPZIONI_INCASSO)
 }
 
 def trova_stagione(data_sel):
@@ -194,7 +195,7 @@ def carica_prenotazioni():
         if "Nome" not in df.columns: df["Nome"] = "" 
         if "Note" not in df.columns: df["Note"] = ""
         if "Operatore" not in df.columns: df["Operatore"] = ""
-        if "Incassato_da" not in df.columns: df["Incassato_da"] = ""
+        if "Incassato_da" not in df.columns: df["Incassato_da"] = "Da saldare"
         
         df["Hotel"] = df["Hotel"].fillna("")
         df["Persone"] = df["Persone"].fillna(2)
@@ -203,7 +204,7 @@ def carica_prenotazioni():
         df["Nome"] = df["Nome"].fillna("")
         df["Note"] = df["Note"].fillna("")
         df["Operatore"] = df["Operatore"].fillna("")
-        df["Incassato_da"] = df["Incassato_da"].fillna("")
+        df["Incassato_da"] = df["Incassato_da"].fillna("Da saldare")
         return df
     return pd.DataFrame(columns=["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Stato", "Prezzo_Giorno", "Hotel", "Persone", "Durata", "Extra", "Note", "Operatore", "Incassato_da"])
 
@@ -312,7 +313,7 @@ with st.sidebar.form("form_prenotazione"):
     
     st.markdown("---")
     input_stato = st.selectbox("Stato Postazione", list(STATI_MAP.keys()))
-    input_incassato = st.selectbox("💰 Pagamento incassato da:", [""] + OPERATORI_SPIAGGIA, help="Seleziona chi ha preso i soldi se il cliente ha già pagato")
+    input_incassato = st.selectbox("💰 Pagamento incassato da:", OPZIONI_INCASSO, help="Seleziona chi ha preso i soldi se il cliente ha già pagato")
     
     prezzo_consigliato_totale = 0.0
     if len(date_selezionate) > 0:
@@ -383,6 +384,29 @@ if submit:
             st.rerun()
     else:
         st.sidebar.error("⚠️ Inserisci Data e NOME del Cliente.")
+
+# --- 💾 SISTEMA SALVAVITA (BACKUP) ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("💾 Salvataggio Sicuro (Backup)")
+st.sidebar.info("Scarica il database ogni sera per non perdere mai i dati in caso di riavvio del server!")
+
+if os.path.exists(FILE_PRENOTAZIONI):
+    with open(FILE_PRENOTAZIONI, "rb") as f:
+        st.sidebar.download_button(
+            label="⬇️ Scarica Database Prenotazioni",
+            data=f,
+            file_name=f"prenotazioni_{date.today().strftime('%Y-%m-%d')}.csv",
+            mime="text/csv",
+            type="primary"
+        )
+
+file_caricato = st.sidebar.file_uploader("⬆️ Ripristina un Backup precedente", type=["csv"])
+if file_caricato is not None:
+    if st.sidebar.button("⚠️ Conferma Ripristino Dati"):
+        df_ripristino = pd.read_csv(file_caricato)
+        df_ripristino.to_csv(FILE_PRENOTAZIONI, index=False)
+        st.sidebar.success("✅ Ripristino completato! Ricarica la pagina.")
+        st.rerun()
 
 st.sidebar.markdown("---")
 
@@ -478,7 +502,7 @@ else:
             badge_operatore = f" ✍️ {nome_op}" if nome_op else ""
             
             incassato_val = str(record.iloc[0].get('Incassato_da', ""))
-            nome_incass = incassato_val.split()[0] if incassato_val and incassato_val != "nan" else ""
+            nome_incass = incassato_val.split()[0] if incassato_val and incassato_val not in ["nan", "Da", "Da saldare"] else ""
             badge_incassato = f" 💰 {nome_incass} |" if nome_incass else ""
             
             badge_durata = "🌗" if "Mezza" in str(durata) else ""
