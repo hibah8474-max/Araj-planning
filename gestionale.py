@@ -145,6 +145,7 @@ CONFIGURAZIONE_COLONNE = {
     "Fila": st.column_config.SelectboxColumn("Fila", options=list(CAPIENZA_FILE.keys())),
     "Durata": st.column_config.SelectboxColumn("Durata", options=["Giornata Intera", "Mezza Giornata (fino 13 / da 15.30)", "Solo 1 Persona (Postazione Ridotta)"]),
     "Prezzo_Giorno": st.column_config.NumberColumn("Prezzo (€)", step=1.0),
+    "Sconto": st.column_config.NumberColumn("Sconto (€)", step=1.0),
     "Persone": st.column_config.NumberColumn("Persone", min_value=1, step=1),
     "Note": st.column_config.TextColumn("Note / Memo"),
     "Operatore": st.column_config.SelectboxColumn("Operatore", options=OPERATORI_SPIAGGIA),
@@ -196,6 +197,7 @@ def carica_prenotazioni():
         if "Note" not in df.columns: df["Note"] = ""
         if "Operatore" not in df.columns: df["Operatore"] = ""
         if "Incassato_da" not in df.columns: df["Incassato_da"] = "Da saldare"
+        if "Sconto" not in df.columns: df["Sconto"] = 0.0
         
         df["Hotel"] = df["Hotel"].fillna("")
         df["Persone"] = df["Persone"].fillna(2)
@@ -205,8 +207,9 @@ def carica_prenotazioni():
         df["Note"] = df["Note"].fillna("")
         df["Operatore"] = df["Operatore"].fillna("")
         df["Incassato_da"] = df["Incassato_da"].fillna("Da saldare")
+        df["Sconto"] = df["Sconto"].fillna(0.0)
         return df
-    return pd.DataFrame(columns=["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Stato", "Prezzo_Giorno", "Hotel", "Persone", "Durata", "Extra", "Note", "Operatore", "Incassato_da"])
+    return pd.DataFrame(columns=["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Stato", "Prezzo_Giorno", "Sconto", "Hotel", "Persone", "Durata", "Extra", "Note", "Operatore", "Incassato_da"])
 
 st.set_page_config(page_title="Beach Pass Pro", layout="wide")
 st.title("🏖️ Beach Pass - Planning Ombrelloni Pro")
@@ -214,13 +217,63 @@ st.title("🏖️ Beach Pass - Planning Ombrelloni Pro")
 df_clienti = carica_clienti()
 df_pren = carica_prenotazioni()
 
+# --- 💼 SALDO CLIENTI ABITUALI (PAGAMENTO A FINE MESE/PERIODO) ---
+with st.expander("💼 Saldo Clienti Abituali (Pagamento Cumulativo / Sconti di fine periodo)", expanded=False):
+    st.info("Usa questa sezione per far pagare in un colpo solo tutte le giornate accumulate da un cliente e per applicare eventuali sconti speciali concessi da Alberto.")
+    
+    # Crea una lista di nomi univoci che hanno ancora conti "Da saldare"
+    clienti_con_debiti = df_pren[df_pren['Incassato_da'] == "Da saldare"]['Nome'].dropna().unique().tolist()
+    clienti_con_debiti = [c for c in clienti_con_debiti if str(c).strip() != ""]
+    
+    cliente_sel = st.selectbox("Seleziona il Cliente da saldare:", [""] + sorted(clienti_con_debiti))
+    
+    if cliente_sel:
+        mask_da_saldare = (df_pren['Nome'] == cliente_sel) & (df_pren['Incassato_da'] == "Da saldare")
+        df_cliente = df_pren[mask_da_saldare]
+        
+        if not df_cliente.empty:
+            totale_dovuto = df_cliente['Prezzo_Giorno'].sum()
+            st.warning(f"💶 **Totale accumulato da saldare per {cliente_sel}: € {totale_dovuto:.2f}**")
+            
+            col_sc, col_inc = st.columns(2)
+            with col_sc:
+                sconto_cumulativo = st.number_input("📉 Sconto Finale (€) applicato:", min_value=0.0, max_value=float(totale_dovuto), value=0.0, step=1.0)
+            with col_inc:
+                incassato_da_cum = st.selectbox("💰 I soldi sono incassati in questo momento da:", OPERATORI_SPIAGGIA, key="inc_cum")
+                
+            totale_scontato = totale_dovuto - sconto_cumulativo
+            st.success(f"💳 **TOTALE NETTO CHE IL CLIENTE DEVE PAGARE ORA: € {totale_scontato:.2f}**")
+            
+            if st.button("✅ Registra Saldo Definitivo (Aggiorna tutto)"):
+                indici = df_cliente.index.tolist()
+                
+                # Sottraiamo lo sconto dall'ultimo giorno prenotato per far tornare i conti finali nel report
+                if sconto_cumulativo > 0:
+                    ultimo_idx = indici[-1]
+                    df_pren.loc[ultimo_idx, 'Prezzo_Giorno'] -= sconto_cumulativo
+                    df_pren.loc[ultimo_idx, 'Sconto'] = sconto_cumulativo
+                    nota_esistente = str(df_pren.loc[ultimo_idx, 'Note']) if pd.notna(df_pren.loc[ultimo_idx, 'Note']) else ""
+                    df_pren.loc[ultimo_idx, 'Note'] = f"Sconto totale €{sconto_cumulativo}. " + nota_esistente
+                
+                # Passiamo tutte le giornate allo stato pagato
+                for idx in indici:
+                    df_pren.loc[idx, 'Incassato_da'] = incassato_da_cum
+                    stato_attuale = df_pren.loc[idx, 'Stato']
+                    if stato_attuale == "Presente":
+                        df_pren.loc[idx, 'Stato'] = "Pres_Pagato"
+                    elif stato_attuale in ["Attesa", "Confermato"]:
+                        df_pren.loc[idx, 'Stato'] = "Pagato"
+                        
+                df_pren.to_csv(FILE_PRENOTAZIONI, index=False)
+                st.success(f"Perfetto! Tutte le {len(indici)} postazioni di {cliente_sel} sono state saldate con successo.")
+                st.rerun()
+
 # --- 🔍 MOTORE DI RICERCA INTELLIGENTE ---
 with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
     ricerca = st.text_input("Inserisci una parte del Nome, del Telefono o dell'Hotel:", placeholder="Es. Armando Botta, 328...").strip()
     if ricerca:
         if not df_pren.empty:
             parole = ricerca.split()
-            
             mask_nome = pd.Series(True, index=df_pren.index)
             for parola in parole:
                 mask_nome &= df_pren['Nome'].astype(str).str.contains(parola, case=False, na=False)
@@ -232,8 +285,7 @@ with st.expander("🔍 Cerca Cliente / Modifica Rapida", expanded=False):
             
             if not risultati.empty:
                 st.success(f"Trovate {len(risultati)} prenotazioni. Fai doppio clic sulle celle per modificarle!")
-                
-                colonne_ordine = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Operatore", "Incassato_da", "Prezzo_Giorno", "Persone", "Durata", "Extra", "Note"]
+                colonne_ordine = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Hotel", "Stato", "Operatore", "Incassato_da", "Prezzo_Giorno", "Sconto", "Persone", "Durata", "Extra", "Note"]
                 risultati_filtrati = risultati[colonne_ordine]
                 
                 edited_df = st.data_editor(risultati_filtrati, num_rows="dynamic", use_container_width=True, column_config=CONFIGURAZIONE_COLONNE, key="editor_ricerca")
@@ -321,8 +373,8 @@ with st.sidebar.form("form_prenotazione"):
         prezzo_consigliato_totale = prezzo_unitario * quantita_postazioni
         
     input_prezzo = st.number_input("Prezzo Giornaliero TOTALE (€)", min_value=0.0, value=float(prezzo_consigliato_totale), step=1.0)
-    st.markdown("---")
     
+    st.markdown("---")
     tipo_salvataggio = st.radio("Se la postazione risulta già occupata:", ["Blocca (Errore)", "Sostituisci (Cancella il vecchio)", "Subentro (Tieni il vecchio per l'incasso)"], help="Scegli Subentro per far pagare due clienti sullo stesso ombrellone nello stesso giorno")
     
     submit = st.form_submit_button("Applica Modifiche")
@@ -378,7 +430,7 @@ if submit:
                         nuova_p = pd.DataFrame([{
                             "Data": giorno_corrente_str, "Fila": input_fila, "Ombrellone": omb_corrente,
                             "Nome": input_nome, "Telefono": input_telefono, "Stato": stato_pulito,
-                            "Prezzo_Giorno": prezzo_finale_unitario, "Hotel": str(input_hotel).strip(),
+                            "Prezzo_Giorno": prezzo_finale_unitario, "Sconto": 0.0, "Hotel": str(input_hotel).strip(),
                             "Persone": input_persone, "Durata": input_durata, "Extra": ", ".join(input_extra), 
                             "Note": input_note, "Operatore": input_operatore, "Incassato_da": input_incassato
                         }])
@@ -494,7 +546,6 @@ else:
             record = df_range[(df_range['Ombrellone'] == numero_ombrellone) & (df_range['Fila'] == fila)]
             if record.empty: return "#28a745", "Libero", "", "", ""
             
-            # Se ci sono più clienti (es. Subentro), facciamo vedere l'ultimo arrivato sulla mappa
             ultimo_record = record.iloc[-1]
             
             stato = ultimo_record['Stato']
@@ -503,6 +554,7 @@ else:
             durata = ultimo_record.get('Durata', "")
             extra = ultimo_record.get('Extra', "")
             nome_c = ultimo_record.get('Nome', "")
+            sconto_applicato = float(ultimo_record.get('Sconto', 0.0))
             
             operatore_val = str(ultimo_record.get('Operatore', ""))
             nome_op = operatore_val.split()[0] if operatore_val and operatore_val != "nan" else ""
@@ -512,20 +564,20 @@ else:
             nome_incass = incassato_val.split()[0] if incassato_val and incassato_val not in ["nan", "Da", "Da saldare"] else ""
             badge_incassato = f" 💰 {nome_incass} |" if nome_incass else ""
             
+            badge_sconto = " 📉" if sconto_applicato > 0 else ""
             badge_durata = "🌗" if "Mezza" in str(durata) else ""
             badge_extra = "➕" if extra else ""
             hotel_c = ultimo_record.get('Hotel', "")
             hotel_html = f"<span style='font-size: 11px; color: #ffe8a1; display: block;'>🏨 {hotel_c}</span>" if hotel_c and not pd.isna(hotel_c) else ""
             
-            # Formattazione per la casellina
-            dettagli = f"€{prezzo_g:.0f}{badge_incassato} 👤 {pers}{badge_operatore} {badge_durata}{badge_extra}"
+            dettagli = f"€{prezzo_g:.0f}{badge_incassato}{badge_sconto} 👤 {pers}{badge_operatore} {badge_durata}{badge_extra}"
             badge_rivendibile, colore_box = "", "#28a745"
             
             if stato == "Attesa": colore_box = "#ffc107"
             elif stato == "Confermato": colore_box = "#dc3545"
             elif stato == "Pagato": colore_box = "#007bff"
             elif stato == "Presente": colore_box = "#6f42c1"
-            elif stato == "Pres_Pagato": colore_box = "#20c997" # Verde Acqua / Teal
+            elif stato == "Pres_Pagato": colore_box = "#20c997" 
             elif stato == "Libero_Mat":
                 colore_box = "#17a2b8"
                 badge_rivendibile = "<span style='background:#fff; color:#17a2b8; padding:2px 4px; border-radius:4px; font-weight:bold; font-size:10px; display:inline-block; margin-bottom:4px;'>🌅 LIBERO MATTINA</span><br>"
@@ -577,7 +629,7 @@ else:
         else:
             st.info("💡 Fai doppio clic sulle celle per cambiare lo Stato, aggiornare l'Operatore, chi ha Incassato o le Note, poi clicca su Salva!")
         
-        colonne_tabella = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Stato", "Operatore", "Incassato_da", "Prezzo_Giorno", "Persone", "Durata", "Extra", "Note"]
+        colonne_tabella = ["Data", "Fila", "Ombrellone", "Nome", "Telefono", "Stato", "Operatore", "Incassato_da", "Prezzo_Giorno", "Sconto", "Persone", "Durata", "Extra", "Note"]
         if 'Hotel' in df_range.columns: 
             colonne_tabella.insert(4, "Hotel")
         
@@ -600,12 +652,14 @@ else:
     if not df_range.empty:
         incasso_totale = df_range['Prezzo_Giorno'].sum()
         totale_persone = df_range['Persone'].sum()
+        totale_sconti = df_range['Sconto'].sum()
         
-        col_r1, col_r2 = st.columns(2)
-        col_r1.metric("💶 Incasso Totale Previsto", f"€ {incasso_totale:.2f}")
-        col_r2.metric("👥 Totale Persone Registrate", f"{totale_persone}")
+        col_r1, col_r2, col_r3 = st.columns(3)
+        col_r1.metric("💶 Incasso Netto Giornaliero", f"€ {incasso_totale:.2f}")
+        col_r2.metric("📉 Sconti Applicati Oggi", f"€ {totale_sconti:.2f}")
+        col_r3.metric("👥 Totale Persone Registrate", f"{totale_persone}")
         
-        colonne_report = ["Fila", "Ombrellone", "Nome", "Stato", "Prezzo_Giorno", "Incassato_da", "Operatore", "Note"]
+        colonne_report = ["Fila", "Ombrellone", "Nome", "Stato", "Prezzo_Giorno", "Sconto", "Incassato_da", "Operatore", "Note"]
         st.dataframe(df_range[colonne_report].sort_values(by=["Fila", "Ombrellone"]), use_container_width=True)
         
         csv_report = df_range.to_csv(index=False).encode('utf-8')
