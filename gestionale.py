@@ -53,8 +53,8 @@ def normalizza_tel(t):
 # ==========================================
 
 CAPIENZA_FILE = {
-    "Prima Fila": 15,
-    "Seconda Fila": 14,
+    "Prima Fila": 17,
+    "Seconda Fila": 16,
     "Terza Fila": 9,
     "Quarta Fila": 8,
     "Quinta Fila": 8,
