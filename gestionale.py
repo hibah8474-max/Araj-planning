@@ -221,7 +221,6 @@ df_pren = carica_prenotazioni()
 with st.expander("💼 Saldo Clienti Abituali (Pagamento Cumulativo / Sconti di fine periodo)", expanded=False):
     st.info("Usa questa sezione per far pagare in un colpo solo tutte le giornate accumulate da un cliente e per applicare eventuali sconti speciali concessi da Alberto.")
     
-    # Crea una lista di nomi univoci che hanno ancora conti "Da saldare"
     clienti_con_debiti = df_pren[df_pren['Incassato_da'] == "Da saldare"]['Nome'].dropna().unique().tolist()
     clienti_con_debiti = [c for c in clienti_con_debiti if str(c).strip() != ""]
     
@@ -247,7 +246,6 @@ with st.expander("💼 Saldo Clienti Abituali (Pagamento Cumulativo / Sconti di 
             if st.button("✅ Registra Saldo Definitivo (Aggiorna tutto)"):
                 indici = df_cliente.index.tolist()
                 
-                # Sottraiamo lo sconto dall'ultimo giorno prenotato per far tornare i conti finali nel report
                 if sconto_cumulativo > 0:
                     ultimo_idx = indici[-1]
                     df_pren.loc[ultimo_idx, 'Prezzo_Giorno'] -= sconto_cumulativo
@@ -255,7 +253,6 @@ with st.expander("💼 Saldo Clienti Abituali (Pagamento Cumulativo / Sconti di 
                     nota_esistente = str(df_pren.loc[ultimo_idx, 'Note']) if pd.notna(df_pren.loc[ultimo_idx, 'Note']) else ""
                     df_pren.loc[ultimo_idx, 'Note'] = f"Sconto totale €{sconto_cumulativo}. " + nota_esistente
                 
-                # Passiamo tutte le giornate allo stato pagato
                 for idx in indici:
                     df_pren.loc[idx, 'Incassato_da'] = incassato_da_cum
                     stato_attuale = df_pren.loc[idx, 'Stato']
@@ -332,31 +329,25 @@ st.sidebar.subheader("2. Completa Prenotazione")
 with st.sidebar.form("form_prenotazione"):
     col_q, col_omb = st.columns(2)
     with col_q:
-        quantita_postazioni = st.number_input("Quante postazioni vicine?", min_value=1, max_value=3, value=1)
+        quantita_postazioni = st.selectbox("Quante postazioni vicine?", [1, 2, 3], index=0)
+    
     max_start = max_ombrelloni_riga - quantita_postazioni + 1
     with col_omb:
-        input_ombrellone = st.number_input(f"N° Ombrellone Iniziale", min_value=1, max_value=max_start, value=1, step=1)
+        opzioni_ombrelloni = list(range(1, max(2, max_start + 1)))
+        input_ombrellone = st.selectbox(f"N° Ombrellone Iniziale", opzioni_ombrelloni, index=0)
         
     st.markdown("---")
     
     input_telefono = st.text_input("Telefono Cliente (Opzionale)").strip()
-    nome_automatico = ""
     
-    if input_telefono and not df_clienti.empty:
-        tel_norm = normalizza_tel(input_telefono)
-        df_clienti['Tel_Norm'] = df_clienti['Telefono'].apply(normalizza_tel)
-        cliente_esistente = df_clienti[df_clienti['Tel_Norm'] == tel_norm]
-        if not cliente_esistente.empty:
-            nome_automatico = cliente_esistente.iloc[0]['Nome']
-            st.sidebar.info(f"👤 Trovato in anagrafica: {nome_automatico}")
-            
-    input_nome = st.text_input("Nome Cliente (Obbligatorio)", value=nome_automatico).strip()
-    input_hotel = st.text_input("Nome Hotel (Opzionale)")
+    # 🔴 RIMOSSO IL BUG DELL'AUTOCOMPILAZIONE CHE CANCELLAVA IL NOME
+    input_nome = st.text_input("Nome Cliente (Obbligatorio)").strip()
+    input_hotel = st.text_input("Nome Hotel (Opzionale)").strip()
     
     st.markdown("---")
     col_p, col_d = st.columns(2)
     with col_p:
-        input_persone = st.number_input("Persone (PER OMBRELLONE)", min_value=1, max_value=4, value=2)
+        input_persone = st.selectbox("Persone (PER OMBRELLONE)", [1, 2, 3, 4, 5, 6], index=1)
     with col_d:
         input_durata = st.selectbox("Durata", ["Giornata Intera", "Mezza Giornata (fino 13 / da 15.30)", "Solo 1 Persona (Postazione Ridotta)"])
     
